@@ -1,115 +1,196 @@
-# BREADTH-FIRST-SEARCH
-<h1>ExpNo 3 : Implement Breadth First Search Traversal of a Graph</h1> 
-<h3>Name:  </h3>
-<h3>Register Number: </h3>
-<H3>Aim:</H3>
-<p>To Implement Breadth First Search Traversal of a Graph using Python 3.</p>
-<h3>Theory:</h3>
-<p>Breadth-First Traversal (or Search) for a graph is like the Breadth-First Traversal of a tree.
-The only catch here is that, unlike trees, graphs may contain cycles so that we may come to the same node again. To avoid processing a node more than once, we divide the vertices into two categories:
-<ol><li>Visited</li>
-<li>Not Visited</li></ol>
-</p>
-<p>A Boolean visited array is used to mark the visited vertices. For simplicity, it is assumed that all vertices are reachable from the starting vertex. BFS uses a queue data structure for traversal.</p>
-<p><strong>How does BFS work?</strong><br>
-  Starting from the root, all the nodes at a particular level are visited first, and then the next level nodes are traversed until all the nodes are visited.
-To do this, a queue is used. All the adjacent unvisited nodes of the current level are pushed into the queue, and the current-level nodes are marked visited and popped from the queue.
-Illustration:
-Let us understand the working of the algorithm with the help of the following example.
-Step1: Initially queue and visited arrays are empty.
-</p>
+# PCA-EXP-3-PARALLEL-REDUCTION-USING-UNROLLING-TECHNIQUES AY 23-24
 
-![image](https://github.com/natsaravanan/19AI405FUNDAMENTALSOFARTIFICIALINTELLIGENCE/assets/87870499/8acdebf8-ecc2-4d10-a208-45cce441f059)
+<h3>NAME:ROSHINI S</h3>
+<h3>REGISTER NO:212223230174</h3>
+<h3>EX.NO:03</h3>
+<h3>DATE 13/11/25</h3>
+<h1> <align=center> PARALLEL REDUCTION USING UNROLLING TECHNIQUES </h3>
+  Refer to the kernel reduceUnrolling8 and implement the kernel reduceUnrolling16, in which each thread handles 16 data blocks. Compare kernel performance with reduceUnrolling8 and use the proper metrics and events with nvprof to explain any difference in performance.</h3>
+
+## AIM:
+To implement the kernel reduceUnrolling16 and comapare the performance of kernal reduceUnrolling16 with kernal reduceUnrolling8 using nvprof.
+## EQUIPMENTS REQUIRED:
+Hardware – PCs with NVIDIA GPU & CUDA NVCC
+Google Colab with NVCC Compiler
+## PROCEDURE:
+1.	Initialization and Memory Allocation
+2.	Define the input size n.
+3.	Allocate host memory (h_idata and h_odata) for input and output data.
+Input Data Initialization
+4.	Initialize the input data on the host (h_idata) by assigning a value of 1 to each element.
+Device Memory Allocation
+5.	Allocate device memory (d_idata and d_odata) for input and output data on the GPU.
+Data Transfer: Host to Device
+6.	Copy the input data from the host (h_idata) to the device (d_idata) using cudaMemcpy.
+Grid and Block Configuration
+7.	Define the grid and block dimensions for the kernel launch:
+8.	Each block consists of 256 threads.
+9.	Calculate the grid size based on the input size n and block size.
+10.	Start CPU Timer
+11.	Initialize a CPU timer to measure the CPU execution time.
+12.	Compute CPU Sum
+13.	Calculate the sum of the input data on the CPU using a for loop and store the result in sum_cpu.
+14.	Stop CPU Timer
+15.	Record the elapsed CPU time.
+16.	Start GPU Timer
+17.	Initialize a GPU timer to measure the GPU execution time.
+Kernel Execution
+18.	Launch the reduceUnrolling16 kernel on the GPU with the specified grid and block dimensions.
+Data Transfer: Device to Host
+19.	Copy the result data from the device (d_odata) to the host (h_odata) using cudaMemcpy.
+20.	Compute GPU Sum
+21.	Calculate the final sum on the GPU by summing the elements in h_odata and store the result in sum_gpu.
+22.	Stop GPU Timer
+23.	Record the elapsed GPU time.
+24.	Print Results
+25.	Display the computed CPU sum, GPU sum, CPU elapsed time, and GPU elapsed time.
+Memory Deallocation
+26.	Free the allocated host and device memory using free and cudaFree.
+27.	Exit
+28.	Return from the main function.
+
+## PROGRAM:
+```
+#include <cuda_runtime.h>
+#include <stdio.h>
+#include <sys/time.h>
+// Kernel function declaration
+__global__ void reduceUnrolling16(int *g_idata, int *g_odata, unsigned int n);
+// Function to calculate elapsed time in milliseconds
+double getElapsedTime(struct timeval start, struct timeval end)
+{
+    long seconds = end.tv_sec - start.tv_sec;
+    long microseconds = end.tv_usec - start.tv_usec;
+    double elapsed = seconds + microseconds / 1e6;
+    return elapsed * 1000; // Convert to milliseconds
+}
+int main()
+{
+    // Input size and host memory allocation
+    unsigned int n = 1 << 20; // 1 million elements
+    size_t size = n * sizeof(int);
+    int *h_idata = (int *)malloc(size);
+    int *h_odata = (int *)malloc(size);
+
+    // Initialize input data on the host
+    for (unsigned int i = 0; i < n; i++)
+    {
+        h_idata[i] = 1;
+    }
+
+    // Device memory allocation
+    int *d_idata, *d_odata;
+    cudaMalloc((void **)&d_idata, size);
+    cudaMalloc((void **)&d_odata, size);
+
+    // Copy input data from host to device
+    cudaMemcpy(d_idata, h_idata, size, cudaMemcpyHostToDevice);
+
+    // Define grid and block dimensions
+    dim3 blockSize(256); // 256 threads per block
+    dim3 gridSize((n + blockSize.x * 16 - 1) / (blockSize.x * 16));
+
+    // Start CPU timer
+    struct timeval start_cpu, end_cpu;
+    gettimeofday(&start_cpu, NULL);
+
+    // Compute the sum on the CPU
+    int sum_cpu = 0;
+    for (unsigned int i = 0; i < n; i++)
+    {
+        sum_cpu += h_idata[i];
+    }
+
+    // Stop CPU timer
+    gettimeofday(&end_cpu, NULL);
+    double elapsedTime_cpu = getElapsedTime(start_cpu, end_cpu);
+
+    // Start GPU timer
+    struct timeval start_gpu, end_gpu;
+    gettimeofday(&start_gpu, NULL);
+
+    // Launch the reduction kernel
+    reduceUnrolling16<<<gridSize, blockSize>>>(d_idata, d_odata, n);
+
+    // Copy the result from device to host
+    cudaMemcpy(h_odata, d_odata, size, cudaMemcpyDeviceToHost);
+
+    // Compute the final sum on the GPU
+    int sum_gpu = 0;
+    for (unsigned int i = 0; i < gridSize.x; i++)
+    {
+        sum_gpu += h_odata[i];
+    }
+
+    // Stop GPU timer
+    gettimeofday(&end_gpu, NULL);
+    double elapsedTime_gpu = getElapsedTime(start_gpu, end_gpu);
+
+    // Print the results and elapsed times
+    printf("CPU Sum: %d\n", sum_cpu);
+    printf("GPU Sum: %d\n", sum_gpu);
+    printf("CPU Elapsed Time: %.2f ms\n", elapsedTime_cpu);
+    printf("GPU Elapsed Time: %.2f ms\n", elapsedTime_gpu);
+
+    // Free memory
+    free(h_idata);
+    free(h_odata);
+    cudaFree(d_idata);
+    cudaFree(d_odata);
+
+    return 0;
+}
+
+__global__ void reduceUnrolling16(int *g_idata, int *g_odata, unsigned int n)
+{
+    // Set thread ID
+    unsigned int tid = threadIdx.x;
+    unsigned int idx = blockIdx.x * blockDim.x * 16 + threadIdx.x;
+
+    // Convert global data pointer to the local pointer of this block
+    int *idata = g_idata + blockIdx.x * blockDim.x * 16;
+
+    // Unrolling 16
+    if (idx + 7 * blockDim.x < n)
+    {
+        int a1 = g_idata[idx];
+        int a2 = g_idata[idx + blockDim.x];
+        int a3 = g_idata[idx + 2 * blockDim.x];
+        int a4 = g_idata[idx + 3 * blockDim.x];
+
+        int b1 = g_idata[idx + 8 * blockDim.x];
+        int b2 = g_idata[idx + 9 * blockDim.x];
+        int b3 = g_idata[idx + 10 * blockDim.x];
+        int b4 = g_idata[idx + 11 * blockDim.x];
+
+        g_idata[idx] = a1 + a2 + a3 + a4 + b1 + b2 + b3 + b4;
+    }
+
+    __syncthreads();
+
+    // In-place reduction in global memory
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1)
+    {
+        if (tid < stride)
+        {
+            idata[tid] += idata[tid + stride];
+        }
+
+        // Synchronize within thread block
+        __syncthreads();
+    }
+
+    // Write result for this block to global memory
+    if (tid == 0)
+    {
+        g_odata[blockIdx.x] = idata[0];
+    }
+}
+```
+
+## OUTPUT:
+![image](https://github.com/21005688/PCA-EXP-3-PARALLEL-REDUCTION-USING-UNROLLING-TECHNIQUES-AY-23-24/assets/94747031/e6bed37e-a9bc-4417-81e1-7832798e56d8)
 
 
-Queue and visited arrays are empty initially.
-Step2: Push node 0 into queue and mark it visited.
-
-![image](https://github.com/natsaravanan/19AI405FUNDAMENTALSOFARTIFICIALINTELLIGENCE/assets/87870499/0e9ce012-8e1f-43d7-b7b9-c0fb19fe0c3f)
-
-
-Push node 0 into queue and mark it visited.
-Step 3: Remove node 0 from the front of queue and visit the unvisited neighbours and push them into queue.
-
-![image](https://github.com/natsaravanan/19AI405FUNDAMENTALSOFARTIFICIALINTELLIGENCE/assets/87870499/67d8fa3b-ce9e-46c2-9dd7-089e204e667a)
-
-Step 4: Remove node 1 from the front of queue and visit the unvisited neighbours and push them into queue.
-
-![image](https://github.com/natsaravanan/19AI405FUNDAMENTALSOFARTIFICIALINTELLIGENCE/assets/87870499/b0cf0fde-8a86-41cb-a054-36875ac24ab0)
-
-Step 5: Remove node 2 from the front of queue and visit the unvisited neighbours and push them into queue.
-
-![image](https://github.com/natsaravanan/19AI405FUNDAMENTALSOFARTIFICIALINTELLIGENCE/assets/87870499/8968a163-6b3a-4f7e-8ad4-bbf24f326b9b)
-
-Step 6: Remove node 3 from the front of queue and visit the unvisited neighbours and push them into queue. 
-As we can see that every neighbours of node 3 is visited, so move to the next node that are in the front of the queue.
-
-![image](https://github.com/natsaravanan/19AI405FUNDAMENTALSOFARTIFICIALINTELLIGENCE/assets/87870499/7a1c1b16-ea69-497f-a099-8440200f6dc0)
-
-Steps 7: Remove node 4 from the front of queue and visit the unvisited neighbours and push them into queue. 
-As we can see that every neighbours of node 4 are visited, so move to the next node that is in the front of the queue.
-
-![image](https://github.com/natsaravanan/19AI405FUNDAMENTALSOFARTIFICIALINTELLIGENCE/assets/87870499/8e16ffa3-c3d6-4774-822b-6eb84adedad9)
-
-Remove node 4 from the front of queue and visit the unvisited neighbours and push them into queue.
-Now, Queue becomes empty, So, terminate these process of iteration.
-
-
-<hr>
-<h2>Algorithm:</h2>
-<hr>
-<ol>
-  <li>Construct a Graph with Nodes and Edges</li>
- <li>Breadth First Uses Queue and iterates through the Queue for Traversal.</li>
-  <li>Insert a Start Node into the Queue.</li>
-<li>Find its Successors Or neighbors and Check whether the node is visited or not.</li>
-<li>If Not Visited, add it to the Queue. Else Continue.</li>
-<li>Iterate steps 4 and 5 until all nodes get visited, and there are no more unvisited nodes.</li>
-
-</ol>
-
-<hr>
-<h3>Sample Input</h3>
-<hr>
-7 9 <BR>
-A B <BR>
-A C <BR>
-A F <BR>
-C E <BR>
-C F <BR>
-C D <BR>
-D E <BR>
-D G <BR>
-G F <BR>
-<hr>
-<h3>Sample Output</h3>
-<hr>
-['A', 'B', 'C', 'F', 'E', 'D', 'G']
-
-<hr>
-
-<hr>
-<h3>Sample Input</h3>
-<hr>
-5 6 <BR>
-0 1 <BR>
-0 2 <BR>
-1 2 <BR>
-1 3 <BR>
-2 4 <BR>
-3 4 <BR>
-<hr>
-<h3>Sample Output</h3>
-<hr>
-['0', '1', '2', '3', '4']
-<hr>
-<h3>Result:</h3>
-<hr>
-<p>Thus,a Graph was constructed and implementation of Breadth First Search for the same graph was done successfully.</p>
-
-
-
-
-
-
-
+## RESULT:
+Thus, the program has been executed by unrolling by 8 and unrolling by 16. It is observed that 8 has executed with less elapsed time than 16 with blocks 524288, 1048576.
